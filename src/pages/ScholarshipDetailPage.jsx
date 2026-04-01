@@ -34,21 +34,25 @@ const ScholarshipDetailPage = () => {
   }, [id]);
 
   const loadScholarship = async () => {
-    try {
-      // Fetch from Supabase
-      const { data, error } = await supabase
-        .from('scholarships')
-        .select('*')
-        .eq('id', id)
-        .single();
-        
-      if (!error && data) {
-         setScholarship(data);
-         setLoading(false);
-         return;
+    // UUID regex to detect if the route param is a real Supabase UUID or a local dummy ID
+    const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
+    
+    if (isUUID) {
+      try {
+        const { data, error } = await supabase
+          .from('scholarships')
+          .select('*')
+          .eq('id', id)
+          .single();
+          
+        if (!error && data) {
+           setScholarship(data);
+           setLoading(false);
+           return;
+        }
+      } catch (e) {
+        console.warn("Supabase fetch failed for detail page. Falling back.", e);
       }
-    } catch (e) {
-      console.warn("Supabase fetch failed for detail page. Falling back.", e);
     }
     
     // Fallback to local data
@@ -75,9 +79,17 @@ const ScholarshipDetailPage = () => {
      </div>;
   }
 
-  const benefits = scholarship.benefits_list || ['Financial aid full tuition waiver', '1-on-1 Mentorship and guidance', 'Direct bank transfer every semester'];
-  const documents = scholarship.documents || ['Income Certificate', 'Aadhar Card', 'Previous Year Marksheet', 'Admission Proof / Fee Receipt'];
-  const applyUrl = scholarship.url || scholarship.apply_link || '#';
+  const benefits = Array.isArray(scholarship.benefits) 
+    ? scholarship.benefits 
+    : (scholarship.description 
+      ? [scholarship.description] 
+      : ['Financial aid full tuition waiver', '1-on-1 Mentorship and guidance', 'Direct bank transfer every semester']);
+  const documents = Array.isArray(scholarship.documents_needed) 
+    ? scholarship.documents_needed 
+    : (Array.isArray(scholarship.documents) 
+      ? scholarship.documents 
+      : ['Income Certificate', 'Aadhar Card', 'Previous Year Marksheet', 'Admission Proof / Fee Receipt']);
+  const applyUrl = scholarship.apply_link || '#';
 
   return (
     <div className="min-h-[calc(100vh-64px)] bg-[#F5F5F7] pb-40 relative">
@@ -111,7 +123,7 @@ const ScholarshipDetailPage = () => {
             <div className="flex flex-wrap items-center gap-4 mb-2">
                <div className="flex items-center gap-3 bg-white border border-gray-100 shadow-sm text-text px-5 py-3 rounded-2xl font-bold text-lg">
                   <div className="bg-primary/10 p-2 rounded-xl text-primary"><IndianRupee className="w-5 h-5" /></div> 
-                  {scholarship.amount ? `₹${scholarship.amount.toLocaleString()}` : scholarship.benefits || 'Variable Amount'}
+                  {scholarship.amount ? `₹${Number(scholarship.amount).toLocaleString()}` : 'Variable Amount'}
                </div>
                <div className="flex items-center gap-3 bg-white border border-gray-100 shadow-sm text-text px-5 py-3 rounded-2xl font-bold text-lg">
                   <div className="bg-orange-50 p-2 rounded-xl text-orange-500"><Calendar className="w-5 h-5" /></div> 
@@ -141,7 +153,7 @@ const ScholarshipDetailPage = () => {
                <div className="grid sm:grid-cols-2 gap-4 mt-8 pt-8 border-t border-gray-100">
                   <div className="flex flex-col">
                     <span className="text-text/40 font-bold uppercase tracking-wider text-xs mb-1">Required Income</span>
-                    <span className="text-lg font-bold">{'<'} ₹{scholarship.income_limit?.toLocaleString() || '2,50,000'}</span>
+                    <span className="text-lg font-bold">{'<'} ₹{scholarship.income_limit ? Number(scholarship.income_limit).toLocaleString() : '2,50,000'}</span>
                   </div>
                   <div className="flex flex-col">
                     <span className="text-text/40 font-bold uppercase tracking-wider text-xs mb-1">Required Course</span>

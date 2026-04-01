@@ -15,10 +15,6 @@ const ProfilePage = () => {
     id: '', name: '', gender: '', caste: '', income: '', state: '', course: ''
   });
 
-  useEffect(() => {
-    loadProfile();
-  }, [navigate]);
-
   const loadProfile = async () => {
     try {
       const { data: { session }, error: sessionError } = await supabase.auth.getSession();
@@ -51,6 +47,11 @@ const ProfilePage = () => {
     }
     setLoading(false);
   };
+
+  useEffect(() => {
+    loadProfile();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [navigate]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;

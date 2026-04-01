@@ -12,7 +12,7 @@ const DashboardPage = () => {
   const [user, setUser] = useState(null);
   const [matches, setMatches] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [totalValue, setTotalValue] = useState(0);
+  const [totalValue, setTotalValue] = useState('₹0');
   const [searchQuery, setSearchQuery] = useState('');
   const [tab, setTab] = useState('all');
 
@@ -22,22 +22,22 @@ const DashboardPage = () => {
   }, []);
 
   const calculateTotalValue = (matchedItems) => {
-    // Just a fun dynamic stat: sum up the maximum potential value formatting
     const rawSum = matchedItems.reduce((acc, curr) => {
-       const num = parseInt(curr.benefits.replace(/[^0-9]/g, ''), 10);
-       return acc + (isNaN(num) ? 50000 : num); // Fallback assumption
+       // Safely handle amount — may be number, string, or undefined
+       const amt = Number(curr.amount);
+       if (!isNaN(amt) && amt > 0) return acc + amt;
+       return acc + 50000; // fallback estimate
     }, 0);
     return rawSum >= 100000 ? `₹${(rawSum / 100000).toFixed(1)}L+` : `₹${rawSum.toLocaleString()}`;
   };
 
   const supabaseLoad = async () => {
     try {
-      // 1. Check if user is logged into Supabase
       const { data: { session }, error: sessionError } = await supabase.auth.getSession();
       
       if (!sessionError && session?.user) {
         // Fetch real profile
-        const { data: profile } = await supabase
+        const { data: profile, error: profileError } = await supabase
           .from('users')
           .select('*')
           .eq('id', session.user.id)
@@ -48,26 +48,11 @@ const DashboardPage = () => {
           .from('scholarships')
           .select('*');
 
-        if (profile && !scholarshipsError) {
-          const calculatedMatches = matchScholarships(profile, scholarships || []);
+        if (profile && !profileError && scholarships && !scholarshipsError) {
+          const calculatedMatches = matchScholarships(profile, scholarships);
           setUser(profile);
           setMatches(calculatedMatches);
           setTotalValue(calculateTotalValue(calculatedMatches));
-          
-          // MVP+ Feature: Persist calculated matches into the 'matches' table
-          try {
-             if (calculatedMatches.length > 0) {
-               const matchPayload = calculatedMatches.map(m => ({
-                  user_id: session.user.id,
-                  scholarship_id: m.id,
-                  score: m.matchScore
-               }));
-               await supabase.from('matches').upsert(matchPayload);
-             }
-          } catch(e) {
-             console.warn("Could not save matches to Supabase", e);
-          }
-
           setLoading(false);
           return;
         }
@@ -76,22 +61,20 @@ const DashboardPage = () => {
        console.warn("Real Supabase fetch failed. Falling back to local data.", e);
     }
     
-    // Fallback if Supabase is not configured
-    setTimeout(() => {
-      const stored = localStorage.getItem('scholarMatch_user');
-      if (stored) {
-        try {
-          const parsed = JSON.parse(stored);
-          const localMatches = matchScholarships(parsed, DUMMY_SCHOLARSHIPS);
-          setUser(parsed);
-          setMatches(localMatches);
-          setTotalValue(calculateTotalValue(localMatches));
-        } catch(e) { /* ignore */ }
-      } else {
-        navigate('/onboarding');
-      }
-      setLoading(false);
-    }, 1500);
+    // Fallback if Supabase is not configured or fetch failed
+    const stored = localStorage.getItem('scholarMatch_user');
+    if (stored) {
+      try {
+        const parsed = JSON.parse(stored);
+        const localMatches = matchScholarships(parsed, DUMMY_SCHOLARSHIPS);
+        setUser(parsed);
+        setMatches(localMatches);
+        setTotalValue(calculateTotalValue(localMatches));
+      } catch(_e) { /* ignore */ }
+    } else {
+      navigate('/onboarding');
+    }
+    setLoading(false);
   };
 
   const handleLogout = async () => {
@@ -128,10 +111,10 @@ const DashboardPage = () => {
                  <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></div> Active Profile
               </motion.div>
               <h1 className="text-4xl lg:text-5xl font-extrabold tracking-tight text-text mb-2 flex items-center gap-3">
-                 Hi, {user?.name.split(' ')[0]} <Sparkles className="w-8 h-8 text-primary" />
+                 Hi, {user?.name?.split(' ')[0] || 'Student'} <Sparkles className="w-8 h-8 text-primary" />
               </h1>
               <p className="text-text/60 font-medium text-lg lg:text-xl">
-                Here are the precise opportunities for a <span className="text-black font-bold">{user?.course}</span> student in <span className="text-black font-bold">{user?.state}</span>.
+                Here are the precise opportunities for a <span className="text-black font-bold">{user?.course || 'your'}</span> student in <span className="text-black font-bold">{user?.state || 'India'}</span>.
               </p>
             </div>
           </div>
@@ -211,7 +194,7 @@ const DashboardPage = () => {
         {(() => {
           const trackedIds = JSON.parse(localStorage.getItem('tracked_scholarships') || '[]');
           const filteredMatches = matches.filter(m => {
-             const textMatch = m.name?.toLowerCase().includes(searchQuery.toLowerCase()) || m.course?.toLowerCase().includes(searchQuery.toLowerCase());
+             const textMatch = (m.name || '').toLowerCase().includes(searchQuery.toLowerCase()) || (m.course || '').toLowerCase().includes(searchQuery.toLowerCase());
              const tabMatch = tab === 'saved' ? trackedIds.includes(String(m.id)) : true;
              return textMatch && tabMatch;
           });

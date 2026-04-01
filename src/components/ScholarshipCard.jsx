@@ -22,11 +22,11 @@ export const ScholarshipCard = ({ id, name, amount, deadline, score, index = 0 }
       <div className="flex flex-col gap-3 mb-8">
         <div className="flex items-center text-sm text-text/80 gap-2 font-medium">
           <IndianRupee className="w-5 h-5 text-primary bg-primary/10 p-1 rounded-full" />
-          <span>{amount ? `₹${amount.toLocaleString()}` : 'Variable Amount'}</span>
+          <span>{amount ? `₹${Number(amount).toLocaleString()}` : 'Variable Amount'}</span>
         </div>
         <div className="flex items-center text-sm text-text/80 gap-2 font-medium">
           <Calendar className="w-5 h-5 text-gray-400 bg-gray-100 p-1 rounded-full" />
-          <span>{new Date(deadline).toLocaleDateString('en-US', { day: 'numeric', month: 'long', year: 'numeric' })}</span>
+          <span>{deadline ? new Date(deadline).toLocaleDateString('en-US', { day: 'numeric', month: 'long', year: 'numeric' }) : 'Ongoing'}</span>
         </div>
       </div>
 
