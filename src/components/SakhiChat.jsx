@@ -1,101 +1,204 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { MessageCircle, X, Send, Bot, User as UserIcon } from 'lucide-react';
+import { MessageCircle, X, Send, Bot, User as UserIcon, Sparkles } from 'lucide-react';
 import { supabase } from '../services/supabase';
+
 export const SakhiChat = () => {
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState([
-    { role: 'bot', text: 'Hi! I am Sakhi, your AI scholarship assistant. How can I help you today?' }
+    { role: 'bot', text: 'Namaste! 🙏 I am Sakhi, your AI scholarship assistant. Ask me anything about scholarships, deadlines, or applications!' }
   ]);
   const [input, setInput] = useState('');
   const [isTyping, setIsTyping] = useState(false);
+  const [suggestions, setSuggestions] = useState([
+    'What scholarships am I eligible for?',
+    'Show upcoming deadlines',
+    'Help me with my application'
+  ]);
+  const [userId, setUserId] = useState(null);
+  const [profile, setProfile] = useState(null);
+  const [matches, setMatches] = useState([]);
+  const [applications, setApplications] = useState([]);
   const messagesEndRef = useRef(null);
 
   const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
 
   useEffect(() => {
     scrollToBottom();
+  }, [messages, isTyping]);
+
+  // Load user context on mount
+  useEffect(() => {
+    const loadUserContext = async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session?.user) {
+          // Fallback: try localStorage for demo users
+          const localUser = localStorage.getItem('sm_user_id');
+          if (localUser) setUserId(localUser);
+          return;
+        }
+
+        const uid = session.user.id;
+        setUserId(uid);
+
+        // Fetch profile
+        const { data: profileData } = await supabase
+          .from('users')
+          .select('name, state, caste, income, marks_12th, course, profile_pct')
+          .eq('id', uid)
+          .maybeSingle();
+        if (profileData) setProfile(profileData);
+
+        // Fetch top 5 matched scholarships
+        const { data: matchData } = await supabase
+          .from('matches')
+          .select(`
+            score,
+            scholarship:scholarships (
+              name, amount, deadline, eligibility_text
+            )
+          `)
+          .eq('user_id', uid)
+          .eq('is_dismissed', false)
+          .order('score', { ascending: false })
+          .limit(5);
+
+        if (matchData) {
+          const formatted = matchData.map(m => ({
+            name: m.scholarship?.name,
+            amount: m.scholarship?.amount,
+            deadline: m.scholarship?.deadline,
+            eligibility_text: m.scholarship?.eligibility_text,
+            score: m.score
+          }));
+          setMatches(formatted);
+        }
+
+        // Fetch user applications
+        const { data: appData } = await supabase
+          .from('applications')
+          .select(`
+            status,
+            scholarship:scholarships ( name )
+          `)
+          .eq('user_id', uid);
+
+        if (appData) {
+          const formatted = appData.map(a => ({
+            scholarship_name: a.scholarship?.name,
+            status: a.status
+          }));
+          setApplications(formatted);
+        }
+      } catch (err) {
+        console.warn('[SakhiChat] Could not load user context:', err);
+      }
+    };
+
+    loadUserContext();
+  }, []);
+
+  /**
+   * Build conversation history from messages state
+   * (last 10 messages, mapped to user/assistant roles)
+   */
+  const getHistory = useCallback(() => {
+    const recent = messages.slice(-10);
+    return recent.map(m => ({
+      role: m.role === 'bot' ? 'assistant' : 'user',
+      content: m.text
+    }));
   }, [messages]);
 
-  const handleSend = async (e) => {
-    e.preventDefault();
-    if (!input.trim()) return;
+  /**
+   * Send a message to the Sakhi edge function
+   */
+  const sendToSakhi = async (messageText) => {
+    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+    const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
-    // Add user message
-    setMessages(prev => [...prev, { role: 'user', text: input }]);
-    const currentInput = input.toLowerCase();
+    // Get the current user's JWT for authorization
+    let accessToken = anonKey; // fallback to anon key
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.access_token) {
+        accessToken = session.access_token;
+      }
+    } catch {
+      // continue with anon key
+    }
+
+    const response = await fetch(`${supabaseUrl}/functions/v1/sakhi`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${accessToken}`,
+      },
+      body: JSON.stringify({
+        message: messageText,
+        userId: userId || 'anonymous',
+        profile: profile || {},
+        matches: matches || [],
+        applications: applications || [],
+        history: getHistory(),
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Edge function returned ${response.status}`);
+    }
+
+    return await response.json();
+  };
+
+  const handleSend = async (e, overrideMessage) => {
+    if (e) e.preventDefault();
+    const messageText = overrideMessage || input.trim();
+    if (!messageText) return;
+
+    // Add user message to chat
+    setMessages(prev => [...prev, { role: 'user', text: messageText }]);
     setInput('');
     setIsTyping(true);
+    setSuggestions([]); // Clear suggestions while typing
 
     try {
-      // Perform Real DB Query to use as RAG context
-      const { data, error } = await supabase.from('scholarships').select('*');
-      let schols = [];
-      if (!error && data) {
-         schols = data;
-      } else {
-         const { DUMMY_SCHOLARSHIPS } = await import('../data/scholarships.js');
-         schols = DUMMY_SCHOLARSHIPS;
-      }
+      const data = await sendToSakhi(messageText);
 
-      // Convert Database schemas to raw text string context
-      const contextData = schols.map(s => 
-        `- **${s.name}**: For ${s.course} students in ${s.state === 'all' ? 'All India' : s.state}. Amount: ₹${s.amount || 'Variable'}. Rules: ${s.eligibility_text || 'See official docs'}.`
-      ).join('\n');
-
-      const systemPrompt = `You are Sakhi AI, a highly empathetic and highly concise scholarship assistant for Indian students. 
-You exist inside the 'ScholarMatch' SaaS dashboard.
-Use the following ACTIVE DATABANK of scholarships to answer the user's questions truthfully. 
-If a scholarship isn't in your context, tell them you can't find it. 
-Keep your replies under 3 sentences and use **markdown bolding** for emphasis. Do NOT use headers.
-
-ACTIVE DATABANK:
-${contextData}`;
-
-      // Format previous chat history for OpenAI
-      const openAiHistory = messages.map(m => ({
-         role: m.role === 'bot' ? 'assistant' : 'user',
-         content: m.text
-      }));
-
-      const apiKey = import.meta.env.VITE_OPENAI_API_KEY;
-      if (!apiKey) throw new Error("Missing OpenAI API Key");
-
-      // Invoke OpenAI Chat Completions API
-      const response = await fetch('https://api.openai.com/v1/chat/completions', {
-         method: 'POST',
-         headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${apiKey}`
-         },
-         body: JSON.stringify({
-            model: 'gpt-4o-mini',
-            temperature: 0.3,
-            messages: [
-               { role: 'system', content: systemPrompt },
-               ...openAiHistory,
-               { role: 'user', content: currentInput } // Latest user message
-            ]
-         })
-      });
-
-      const resData = await response.json();
-      
-      let reply = "I'm having trouble processing that right now. Could you rephrase?";
-      if (resData.choices && resData.choices[0] && resData.choices[0].message) {
-         reply = resData.choices[0].message.content;
-      }
-
+      const reply = data.text || "I'm having trouble right now. Please try again!";
       setMessages(prev => [...prev, { role: 'bot', text: reply }]);
-      setIsTyping(false);
 
+      // Update suggestions from response
+      if (data.suggestions && data.suggestions.length > 0) {
+        setSuggestions(data.suggestions);
+      } else {
+        setSuggestions([
+          'Tell me more',
+          'Show my scholarships',
+          'What documents do I need?'
+        ]);
+      }
     } catch (err) {
-       console.error("Sakhi AI Error:", err);
-       setMessages(prev => [...prev, { role: 'bot', text: "I'm currently overloaded with requests and experiencing network trouble. Please double-check the API keys and try again!" }]);
-       setIsTyping(false);
+      console.error('[SakhiChat] Error:', err);
+      setMessages(prev => [...prev, {
+        role: 'bot',
+        text: "I'm having a brief connectivity issue. Please try again in a moment! 🙏"
+      }]);
+      setSuggestions([
+        'Try again',
+        'Show my scholarships',
+        'Check deadlines'
+      ]);
+    } finally {
+      setIsTyping(false);
     }
+  };
+
+  const handleSuggestionClick = (suggestion) => {
+    handleSend(null, suggestion);
   };
 
   return (
@@ -125,7 +228,7 @@ ${contextData}`;
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 50, scale: 0.9 }}
             transition={{ type: "spring", damping: 25, stiffness: 300 }}
-            className="fixed bottom-6 right-6 w-80 sm:w-96 h-[500px] bg-white rounded-3xl shadow-[0_20px_60px_rgba(0,0,0,0.15)] ring-1 ring-black/5 flex flex-col overflow-hidden z-50 origin-bottom-right"
+            className="fixed bottom-6 right-6 w-80 sm:w-96 h-[520px] bg-white rounded-3xl shadow-[0_20px_60px_rgba(0,0,0,0.15)] ring-1 ring-black/5 flex flex-col overflow-hidden z-50 origin-bottom-right"
           >
             {/* Header */}
             <div className="bg-primary p-4 shrink-0 flex items-center justify-between text-white relative overflow-hidden">
@@ -137,7 +240,7 @@ ${contextData}`;
                  <div>
                    <h3 className="font-bold tracking-tight">Sakhi AI</h3>
                    <span className="text-xs text-white/70 font-medium flex items-center gap-1">
-                     <span className="w-2 h-2 rounded-full bg-green-400"></span> Online
+                     <span className="w-2 h-2 rounded-full bg-green-400"></span> Powered by Groq
                    </span>
                  </div>
                </div>
@@ -158,8 +261,13 @@ ${contextData}`;
                         ? 'bg-primary text-white rounded-br-sm' 
                         : 'bg-white border border-gray-100 shadow-sm text-text rounded-bl-sm'
                     }`}>
-                      {/* Very basic bold parsing */}
-                      {msg.text.split('**').map((chunk, i) => i % 2 !== 0 ? <strong key={i}>{chunk}</strong> : chunk)}
+                      {/* Basic bold + line-break parsing */}
+                      {msg.text.split('\n').map((line, li) => (
+                        <span key={li}>
+                          {li > 0 && <br />}
+                          {line.split('**').map((chunk, ci) => ci % 2 !== 0 ? <strong key={ci}>{chunk}</strong> : chunk)}
+                        </span>
+                      ))}
                     </div>
                  </div>
                ))}
@@ -178,6 +286,22 @@ ${contextData}`;
                <div ref={messagesEndRef} />
             </div>
 
+            {/* Quick Suggestions */}
+            {suggestions.length > 0 && !isTyping && (
+              <div className="px-3 py-2 bg-white border-t border-gray-50 flex gap-2 overflow-x-auto shrink-0 scrollbar-hide">
+                {suggestions.map((s, idx) => (
+                  <button
+                    key={idx}
+                    onClick={() => handleSuggestionClick(s)}
+                    className="flex items-center gap-1 px-3 py-1.5 bg-primary/5 hover:bg-primary/10 text-primary text-xs font-semibold rounded-full whitespace-nowrap transition-colors border border-primary/10"
+                  >
+                    <Sparkles className="w-3 h-3 shrink-0" />
+                    {s}
+                  </button>
+                ))}
+              </div>
+            )}
+
             {/* Input Form */}
             <form onSubmit={handleSend} className="p-3 bg-white border-t border-gray-100 flex items-center gap-2 shrink-0">
                <input 
@@ -187,8 +311,9 @@ ${contextData}`;
                  onChange={(e) => setInput(e.target.value)}
                  className="flex-1 bg-gray-50 border border-gray-100 rounded-full px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 text-text font-medium"
                  placeholder="Ask Sakhi something..."
+                 disabled={isTyping}
                />
-               <button type="submit" disabled={!input.trim()} className="w-10 h-10 bg-primary text-white rounded-full flex items-center justify-center shrink-0 hover:bg-primary-dark transition-colors disabled:opacity-50 shadow-md">
+               <button type="submit" disabled={!input.trim() || isTyping} className="w-10 h-10 bg-primary text-white rounded-full flex items-center justify-center shrink-0 hover:bg-primary-dark transition-colors disabled:opacity-50 shadow-md">
                  <Send className="w-4 h-4" />
                </button>
             </form>

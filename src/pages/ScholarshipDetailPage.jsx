@@ -102,7 +102,51 @@ const ScholarshipDetailPage = () => {
             <ArrowLeft className="w-4 h-4" /> Back to matches
           </button>
 
-          <img src={`https://source.unsplash.com/random/1200x400/?${encodeURIComponent(scholarship.course || 'university')},education`} alt="Banner" className="w-full h-[300px] object-cover rounded-[3rem] shadow-2xl mb-10 transition-all hover:scale-[1.01]" />
+          {/* Dynamic Scholarship Banner */}
+          <div className="w-full h-[280px] rounded-[2.5rem] shadow-2xl mb-10 transition-all hover:scale-[1.005] relative overflow-hidden group"
+            style={{
+              background: `linear-gradient(135deg, #0f172a 0%, #1e3a5f 35%, #2563eb 70%, #7c3aed 100%)`,
+            }}
+          >
+            {/* Background image layer */}
+            <div className="absolute inset-0 opacity-20"
+              style={{
+                backgroundImage: `url('/assets/scholarship-banner.png')`,
+                backgroundSize: 'cover',
+                backgroundPosition: 'center',
+              }}
+            />
+            {/* Animated gradient overlay */}
+            <div className="absolute inset-0 bg-gradient-to-r from-blue-600/30 via-transparent to-purple-600/30 group-hover:from-blue-600/40 group-hover:to-purple-600/40 transition-all duration-700" />
+            {/* Decorative floating circles */}
+            <div className="absolute -top-10 -right-10 w-48 h-48 bg-white/10 rounded-full blur-xl" />
+            <div className="absolute -bottom-16 -left-16 w-64 h-64 bg-blue-400/10 rounded-full blur-2xl" />
+            <div className="absolute top-1/2 left-1/3 w-20 h-20 bg-purple-400/15 rounded-full blur-lg animate-pulse" />
+            <div className="absolute top-8 right-16 w-12 h-12 bg-white/10 rounded-full" />
+            <div className="absolute bottom-10 right-1/4 w-8 h-8 bg-cyan-300/20 rounded-full animate-bounce" style={{ animationDelay: '0.5s', animationDuration: '3s' }} />
+            {/* Grid pattern overlay */}
+            <div className="absolute inset-0 opacity-[0.04]"
+              style={{
+                backgroundImage: `radial-gradient(circle, white 1px, transparent 1px)`,
+                backgroundSize: '30px 30px',
+              }}
+            />
+            {/* Content */}
+            <div className="relative z-10 h-full flex flex-col items-center justify-center px-8 text-center">
+              <div className="w-20 h-20 bg-white/15 backdrop-blur-md rounded-[1.5rem] flex items-center justify-center mb-4 ring-1 ring-white/20 shadow-lg">
+                <GraduationCap className="w-10 h-10 text-white" />
+              </div>
+              <p className="text-white/80 text-lg font-semibold tracking-wide uppercase">
+                {scholarship.provider_name || scholarship.provider || 'Scholarship Opportunity'}
+              </p>
+              <p className="text-white/50 text-sm mt-2 font-medium tracking-wider">
+                {scholarship.provider_type === 'central_govt' ? '🏛️ Central Government' 
+                  : scholarship.provider_type === 'state_govt' ? '🏛️ State Government' 
+                  : scholarship.provider_type === 'private' ? '🏢 Private Organization' 
+                  : '📚 Education Grant'}
+              </p>
+            </div>
+          </div>
           
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }}>
             <div className="flex justify-between items-center mb-6">
