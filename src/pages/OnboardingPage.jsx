@@ -5,6 +5,7 @@ import { ArrowRight, ArrowLeft, FastForward, Loader2, Mail } from 'lucide-react'
 import { InputField } from '../components/InputField';
 import { Button } from '../components/Button';
 import { supabase } from '../services/supabase';
+import { INDIAN_STATES } from '../data/indianStates';
 
 const OnboardingPage = () => {
   const navigate = useNavigate();
@@ -305,9 +306,7 @@ const OnboardingPage = () => {
                       { label: 'General', value: 'General' }, { label: 'OBC', value: 'OBC' }, { label: 'SC', value: 'SC' }, { label: 'ST', value: 'ST' }
                     ]} />
                     <InputField label="Annual Family Income (₹)" name="income" type="number" value={formData.income} onChange={handleChange} placeholder="e.g. 250000" required />
-                    <InputField label="State of Domicile" name="state" type="select" value={formData.state} onChange={handleChange} required options={[
-                       { label: 'Maharashtra', value: 'Maharashtra' }, { label: 'Delhi', value: 'Delhi' }, { label: 'Uttar Pradesh', value: 'Uttar Pradesh' }, { label: 'Karnataka', value: 'Karnataka' }, {label: 'All India', value: 'All India'}
-                    ]} />
+                    <InputField label="State of Domicile" name="state" type="select" value={formData.state} onChange={handleChange} required options={INDIAN_STATES} />
                     <InputField label="Disability Status" name="disability" type="select" value={formData.disability || 'No'} onChange={handleChange} required options={[
                        { label: 'None', value: 'No' }, { label: 'Physical', value: 'Physical' }, { label: 'Visual', value: 'Visual' }
                     ]} />
