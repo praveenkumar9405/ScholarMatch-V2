@@ -1,8 +1,23 @@
 import { motion } from 'framer-motion';
-import { Calendar, IndianRupee, ArrowRight } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { Calendar, IndianRupee, ArrowRight, ExternalLink } from 'lucide-react';
+import { Link, useNavigate } from 'react-router-dom';
 
-export const ScholarshipCard = ({ id, name, amount, deadline, score, index = 0 }) => {
+export const ScholarshipCard = ({ id, name, amount, deadline, score, apply_link, index = 0 }) => {
+  const navigate = useNavigate();
+
+  const handleApply = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    if (apply_link && apply_link !== '#') {
+      // Open the external apply link AND navigate to detail page
+      window.open(apply_link, '_blank', 'noopener,noreferrer');
+    } else {
+      // No external link — go to the detail page where they can find more info
+      navigate(`/scholarship/${id}`);
+    }
+  };
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
@@ -34,8 +49,11 @@ export const ScholarshipCard = ({ id, name, amount, deadline, score, index = 0 }
         <Link to={`/scholarship/${id}`} className="text-primary font-semibold text-sm hover:text-black flex items-center gap-1 group-hover:gap-2 transition-all">
           View Detailed <ArrowRight className="w-4 h-4" />
         </Link>
-        <button className="bg-text text-white px-5 py-2.5 rounded-xl text-sm font-semibold hover:bg-primary transition-colors shadow-sm">
-          Apply Now
+        <button 
+          onClick={handleApply}
+          className="bg-text text-white px-5 py-2.5 rounded-xl text-sm font-semibold hover:bg-primary transition-colors shadow-sm flex items-center gap-1.5 hover:shadow-md active:scale-95"
+        >
+          Apply Now <ExternalLink className="w-3.5 h-3.5" />
         </button>
       </div>
     </motion.div>

@@ -13,7 +13,9 @@ const Navbar = () => {
     <nav className="sticky top-0 z-50 glass border-b border-gray-100/50">
       <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
         <Link to="/" className="text-xl font-bold tracking-tight flex items-center gap-2">
-          <div className="w-8 h-8 rounded-[10px] bg-primary text-white flex items-center justify-center font-bold text-lg shadow-inner">S</div>
+          <div className="w-8 h-8 rounded-[10px] bg-primary flex items-center justify-center shadow-inner overflow-hidden">
+            <img src="https://cdn-icons-png.flaticon.com/512/6956/6956805.png" alt="ScholarMatch" className="w-5 h-5 invert" />
+          </div>
           ScholarMatch
         </Link>
         <div className="flex items-center gap-3">

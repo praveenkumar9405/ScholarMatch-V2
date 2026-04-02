@@ -1,7 +1,9 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { MessageCircle, X, Send, Bot, User as UserIcon, Sparkles } from 'lucide-react';
+import { X, Send, User as UserIcon, Sparkles } from 'lucide-react';
 import { supabase } from '../services/supabase';
+
+const SAKHI_LOGO = 'https://cdn-icons-png.flaticon.com/512/6956/6956805.png';
 
 export const SakhiChat = () => {
   const [isOpen, setIsOpen] = useState(false);
@@ -35,7 +37,6 @@ export const SakhiChat = () => {
       try {
         const { data: { session } } = await supabase.auth.getSession();
         if (!session?.user) {
-          // Fallback: try localStorage for demo users
           const localUser = localStorage.getItem('sm_user_id');
           if (localUser) setUserId(localUser);
           return;
@@ -44,7 +45,6 @@ export const SakhiChat = () => {
         const uid = session.user.id;
         setUserId(uid);
 
-        // Fetch profile
         const { data: profileData } = await supabase
           .from('users')
           .select('name, state, caste, income, marks_12th, course, profile_pct')
@@ -52,7 +52,6 @@ export const SakhiChat = () => {
           .maybeSingle();
         if (profileData) setProfile(profileData);
 
-        // Fetch top 5 matched scholarships
         const { data: matchData } = await supabase
           .from('matches')
           .select(`
@@ -77,7 +76,6 @@ export const SakhiChat = () => {
           setMatches(formatted);
         }
 
-        // Fetch user applications
         const { data: appData } = await supabase
           .from('applications')
           .select(`
@@ -101,10 +99,6 @@ export const SakhiChat = () => {
     loadUserContext();
   }, []);
 
-  /**
-   * Build conversation history from messages state
-   * (last 10 messages, mapped to user/assistant roles)
-   */
   const getHistory = useCallback(() => {
     const recent = messages.slice(-10);
     return recent.map(m => ({
@@ -113,15 +107,11 @@ export const SakhiChat = () => {
     }));
   }, [messages]);
 
-  /**
-   * Send a message to the Sakhi edge function
-   */
   const sendToSakhi = async (messageText) => {
     const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
     const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
-    // Get the current user's JWT for authorization
-    let accessToken = anonKey; // fallback to anon key
+    let accessToken = anonKey;
     try {
       const { data: { session } } = await supabase.auth.getSession();
       if (session?.access_token) {
@@ -159,11 +149,10 @@ export const SakhiChat = () => {
     const messageText = overrideMessage || input.trim();
     if (!messageText) return;
 
-    // Add user message to chat
     setMessages(prev => [...prev, { role: 'user', text: messageText }]);
     setInput('');
     setIsTyping(true);
-    setSuggestions([]); // Clear suggestions while typing
+    setSuggestions([]);
 
     try {
       const data = await sendToSakhi(messageText);
@@ -171,7 +160,6 @@ export const SakhiChat = () => {
       const reply = data.text || "I'm having trouble right now. Please try again!";
       setMessages(prev => [...prev, { role: 'bot', text: reply }]);
 
-      // Update suggestions from response
       if (data.suggestions && data.suggestions.length > 0) {
         setSuggestions(data.suggestions);
       } else {
@@ -215,7 +203,7 @@ export const SakhiChat = () => {
             onClick={() => setIsOpen(true)}
             className="fixed bottom-6 right-6 w-14 h-14 bg-primary text-white rounded-full flex items-center justify-center shadow-[0_8px_30px_rgb(0,113,227,0.4)] z-50 ring-4 ring-white"
           >
-            <MessageCircle className="w-6 h-6" />
+            <img src={SAKHI_LOGO} alt="Sakhi" className="w-7 h-7 invert" />
           </motion.button>
         )}
       </AnimatePresence>
@@ -234,9 +222,9 @@ export const SakhiChat = () => {
             <div className="bg-primary p-4 shrink-0 flex items-center justify-between text-white relative overflow-hidden">
                <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full blur-2xl"></div>
                <div className="flex items-center gap-3 relative z-10">
-                 <div className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center backdrop-blur-sm">
-                   <Bot className="w-6 h-6 shrink-0" />
-                 </div>
+                 <div className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center backdrop-blur-sm overflow-hidden">
+                    <img src={SAKHI_LOGO} alt="Sakhi" className="w-6 h-6 invert" />
+                  </div>
                  <div>
                    <h3 className="font-bold tracking-tight">Sakhi AI</h3>
                    <span className="text-xs text-white/70 font-medium flex items-center gap-1">
@@ -253,8 +241,8 @@ export const SakhiChat = () => {
             <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-gray-50/50">
                {messages.map((msg, idx) => (
                  <div key={idx} className={`flex items-end gap-2 ${msg.role === 'user' ? 'flex-row-reverse' : ''}`}>
-                    <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 shadow-sm ${msg.role === 'user' ? 'bg-gray-200 text-gray-600' : 'bg-primary/10 text-primary'}`}>
-                      {msg.role === 'user' ? <UserIcon className="w-4 h-4" /> : <Bot className="w-5 h-5" />}
+                    <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 shadow-sm overflow-hidden ${msg.role === 'user' ? 'bg-gray-200 text-gray-600' : 'bg-primary/10'}`}>
+                      {msg.role === 'user' ? <UserIcon className="w-4 h-4" /> : <img src={SAKHI_LOGO} alt="Sakhi" className="w-5 h-5" />}
                     </div>
                     <div className={`p-3 rounded-2xl max-w-[75%] text-sm font-medium leading-relaxed ${
                       msg.role === 'user' 
@@ -273,8 +261,8 @@ export const SakhiChat = () => {
                ))}
                {isTyping && (
                  <div className="flex items-end gap-2">
-                    <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 shadow-sm bg-primary/10 text-primary">
-                      <Bot className="w-5 h-5" />
+                    <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 shadow-sm bg-primary/10 overflow-hidden">
+                      <img src={SAKHI_LOGO} alt="Sakhi" className="w-5 h-5" />
                     </div>
                     <div className="p-4 rounded-2xl bg-white border border-gray-100 shadow-sm rounded-bl-sm flex gap-1">
                       <div className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
